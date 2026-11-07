@@ -1,0 +1,951 @@
+
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#071C70">
+<title>JULFERIIN GPS TRACKING</title>
+
+<link rel="stylesheet"
+href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+:root{
+ --navy:#071C70;
+ --blue:#063DBE;
+ --cyan:#08BDF5;
+ --pink:#F00091;
+ --bg:#F0F4FF;
+ --white:#fff;
+ --text:#17234A;
+ --muted:#71809F;
+}
+*{box-sizing:border-box}
+body{
+ margin:0;
+ font-family:Arial,sans-serif;
+ background:var(--bg);
+ color:var(--text);
+}
+header{
+ background:linear-gradient(120deg,var(--navy),var(--blue));
+ color:white;
+ padding:17px;
+ display:flex;
+ justify-content:space-between;
+ align-items:center;
+ gap:10px;
+}
+.brand{font-size:18px;font-weight:bold}
+.brand small{display:block;font-size:10px;color:#8eeaff;margin-top:5px}
+button{
+ border:0;
+ padding:12px 16px;
+ border-radius:9px;
+ background:var(--blue);
+ color:white;
+ font-weight:bold;
+ cursor:pointer;
+}
+button:disabled{opacity:.5}
+.secondary{background:#e7edff;color:var(--navy)}
+.danger{background:#c91c48}
+.success{background:#078b68}
+.hidden{display:none!important}
+.container{max-width:1150px;margin:auto;padding:16px}
+.panel{
+ background:white;
+ border-radius:14px;
+ padding:18px;
+ margin-bottom:15px;
+ box-shadow:0 3px 14px #071c7010;
+}
+h2{font-size:19px;margin-top:0}
+h3{font-size:15px}
+input,select{
+ width:100%;
+ padding:13px;
+ border:1px solid #d8e0f2;
+ border-radius:9px;
+ margin:6px 0 13px;
+ font-size:15px;
+ background:white;
+ color:var(--text);
+}
+label{font-size:13px;font-weight:bold}
+.grid{
+ display:grid;
+ grid-template-columns:repeat(auto-fit,minmax(145px,1fr));
+ gap:12px;
+}
+.stat{
+ background:white;
+ border-radius:12px;
+ padding:16px;
+ border-left:4px solid var(--cyan);
+ box-shadow:0 2px 10px #071c7010;
+}
+.stat strong{font-size:25px;display:block;color:var(--blue)}
+.stat span{font-size:12px;color:var(--muted)}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+#map{
+ width:100%;
+ height:440px;
+ border-radius:12px;
+ z-index:1;
+}
+.vehicle{
+ border:1px solid #e2e8f5;
+ padding:13px;
+ border-radius:10px;
+ margin:10px 0;
+}
+.vehicle strong{display:block;margin-bottom:5px}
+.badge{
+ display:inline-block;
+ font-size:11px;
+ padding:5px 9px;
+ border-radius:20px;
+ background:#e6f7ee;
+ color:#087c4c;
+ margin:5px 0;
+}
+.badge.red{background:#ffe6ed;color:#bc1742}
+.muted{color:var(--muted);font-size:12px}
+#message{
+ padding:12px;
+ border-radius:9px;
+ margin:10px 0;
+ background:#e8f2ff;
+ color:var(--navy);
+ font-size:13px;
+ white-space:pre-wrap;
+}
+nav{
+ display:flex;
+ flex-wrap:wrap;
+ gap:7px;
+ margin-bottom:15px;
+}
+nav button{font-size:12px;padding:11px}
+footer{text-align:center;color:var(--muted);font-size:11px;padding:25px}
+@media(max-width:600px){
+ header{align-items:flex-start}
+ .brand{font-size:15px}
+ #map{height:350px}
+ .container{padding:10px}
+}
+</style>
+</head>
+
+<body>
+
+<header>
+ <div class="brand">
+  JULFERIIN GPS TRACKING
+  <small>SMART FLEET MANAGEMENT V2</small>
+ </div>
+ <button class="secondary" id="logoutBtn" onclick="logout()" style="display:none">SAIR</button>
+</header>
+
+<div class="container">
+
+<div id="message">A iniciar JULFERIIN GPS TRACKING...</div>
+
+<!-- LOGIN -->
+<section id="authSection" class="panel hidden">
+ <h2>Entrar na plataforma</h2>
+
+ <label>Email</label>
+ <input id="email" type="email" placeholder="O teu email">
+
+ <label>Palavra-passe</label>
+ <input id="password" type="password" placeholder="Palavra-passe">
+
+ <div class="actions">
+  <button onclick="login()">ENTRAR</button>
+  <button class="secondary" onclick="register()">CRIAR CONTA</button>
+ </div>
+
+ <p class="muted">
+ Os clientes podem criar as suas contas. O administrador
+ utiliza a conta principal JULFERIIN.
+ </p>
+</section>
+
+<!-- DASHBOARD -->
+<section id="dashboard" class="hidden">
+
+ <div class="panel">
+  <h2 id="welcome">Painel JULFERIIN</h2>
+  <span class="badge" id="roleBadge">CLIENTE</span>
+  <p class="muted" id="userEmail"></p>
+ </div>
+
+ <nav>
+  <button onclick="showPage('home')">INÍCIO</button>
+  <button onclick="showPage('vehicles')">MOTAS</button>
+  <button onclick="showPage('add')">+ REGISTAR MOTA</button>
+  <button onclick="showPage('mapPage')">MAPA GPS</button>
+  <button onclick="showPage('alerts')">ALERTAS</button>
+ </nav>
+
+ <!-- HOME -->
+ <section id="home" class="page">
+  <div class="grid">
+   <div class="stat">
+    <strong id="totalVehicles">0</strong>
+    <span>TOTAL DE MOTAS</span>
+   </div>
+   <div class="stat">
+    <strong id="activeVehicles">0</strong>
+    <span>MOTAS ATIVAS</span>
+   </div>
+   <div class="stat">
+    <strong id="stolenVehicles">0</strong>
+    <span>MOTAS ROUBADAS</span>
+   </div>
+   <div class="stat">
+    <strong id="totalAlerts">0</strong>
+    <span>ALERTAS</span>
+   </div>
+  </div>
+
+  <div class="panel" style="margin-top:15px">
+   <h2>Resumo da frota</h2>
+   <p class="muted">Acompanhamento das motas registadas na plataforma.</p>
+   <button onclick="showPage('mapPage')">ABRIR MAPA GPS</button>
+  </div>
+ </section>
+
+ <!-- VEHICLES -->
+ <section id="vehicles" class="page hidden">
+  <div class="panel">
+   <h2>As minhas motas / Frota</h2>
+   <button onclick="loadVehicles()">ATUALIZAR</button>
+   <div id="vehicleList"></div>
+  </div>
+ </section>
+
+ <!-- ADD VEHICLE -->
+ <section id="add" class="page hidden">
+  <div class="panel">
+   <h2>Registar nova mota</h2>
+
+   <label>Nome da mota</label>
+   <input id="vname" placeholder="Ex: Mota BM49">
+
+   <label>Matrícula</label>
+   <input id="plate" placeholder="Matrícula">
+
+   <label>Marca</label>
+   <input id="brand" placeholder="Honda, Yamaha...">
+
+   <label>Modelo</label>
+   <input id="model" placeholder="Modelo">
+
+   <label>Cor</label>
+   <input id="color" placeholder="Cor">
+
+   <button onclick="addVehicle()">GUARDAR MOTA</button>
+  </div>
+ </section>
+
+ <!-- MAP -->
+ <section id="mapPage" class="page hidden">
+  <div class="panel">
+   <h2>Mapa GPS em tempo real</h2>
+   <p class="muted">
+    As posições recebidas aparecem no mapa.
+   </p>
+   <button onclick="loadPositions()">ATUALIZAR POSIÇÕES</button>
+   <div id="map" style="margin-top:12px"></div>
+   <div id="mapStatus" class="muted" style="margin-top:10px"></div>
+  </div>
+ </section>
+
+ <!-- ALERTS -->
+ <section id="alerts" class="page hidden">
+  <div class="panel">
+   <h2>Alertas de segurança</h2>
+   <button onclick="loadAlerts()">ATUALIZAR ALERTAS</button>
+   <div id="alertList"></div>
+  </div>
+ </section>
+
+</section>
+</div>
+
+<footer>
+ JULFERIIN LDA · GPS TRACKING V2
+</footer>
+
+<script>
+/* =================================
+   LIGAÇÃO AO NOVO SUPABASE
+================================= */
+
+const SUPABASE_URL =
+'https://puqhyyvsavxgdhqfvclu.supabase.co';
+
+const SUPABASE_KEY =
+'sb_publishable_03s_PptB6RISaQoThvNfnA_ijCWfaQB';
+
+const db = window.supabase.createClient(
+ SUPABASE_URL,
+ SUPABASE_KEY
+);
+
+let currentUser = null;
+let profile = null;
+let vehicles = [];
+let map = null;
+let markers = {};
+let gpsWatch = null;
+let realtimeChannels = [];
+
+/* =================================
+   MENSAGENS
+================================= */
+
+function msg(text){
+ document.getElementById('message').textContent=text;
+}
+
+function errorText(e){
+ return e?.message || String(e);
+}
+
+/* =================================
+   INICIALIZAÇÃO
+================================= */
+
+async function init(){
+ try{
+  const {data,error}=await db.auth.getSession();
+  if(error) throw error;
+
+  if(data.session){
+   currentUser=data.session.user;
+   await enterApp();
+  }else{
+   showAuth();
+  }
+ }catch(e){
+  msg('Erro ao iniciar: '+errorText(e));
+ }
+}
+
+function showAuth(){
+ document.getElementById('authSection').classList.remove('hidden');
+ document.getElementById('dashboard').classList.add('hidden');
+ document.getElementById('logoutBtn').style.display='none';
+ msg('JULFERIIN GPS TRACKING pronto. Entra na tua conta.');
+}
+
+/* =================================
+   REGISTO DE CLIENTES
+================================= */
+
+async function register(){
+ const email=document.getElementById('email').value.trim();
+ const password=document.getElementById('password').value;
+
+ if(!email || password.length<8){
+  msg('Introduz email e uma palavra-passe com pelo menos 8 caracteres.');
+  return;
+ }
+
+ try{
+  const {data,error}=await db.auth.signUp({
+   email,
+   password,
+   options:{
+    data:{full_name:email.split('@')[0]}
+   }
+  });
+
+  if(error) throw error;
+
+  if(data.session){
+   currentUser=data.user;
+   await enterApp();
+  }else{
+   msg('Conta criada. Confirma o teu email, se a confirmação estiver ativada, e depois entra.');
+  }
+ }catch(e){
+  msg('Erro no registo: '+errorText(e));
+ }
+}
+
+/* =================================
+   LOGIN
+================================= */
+
+async function login(){
+ const email=document.getElementById('email').value.trim();
+ const password=document.getElementById('password').value;
+
+ if(!email || !password){
+  msg('Preenche email e palavra-passe.');
+  return;
+ }
+
+ try{
+  const {data,error}=await db.auth.signInWithPassword({
+   email,password
+  });
+
+  if(error) throw error;
+
+  currentUser=data.user;
+  await enterApp();
+ }catch(e){
+  msg('Erro no login: '+errorText(e));
+ }
+}
+
+/* =================================
+   CARREGAR PERFIL
+================================= */
+
+async function enterApp(){
+ try{
+  const {data,error}=await db
+   .from('profiles')
+   .select('*')
+   .eq('id',currentUser.id)
+   .single();
+
+  if(error) throw error;
+
+  profile=data;
+
+  document.getElementById('authSection').classList.add('hidden');
+  document.getElementById('dashboard').classList.remove('hidden');
+  document.getElementById('logoutBtn').style.display='block';
+
+  document.getElementById('welcome').textContent=
+   'Bem-vindo ao JULFERIIN GPS TRACKING';
+
+  document.getElementById('userEmail').textContent=
+   currentUser.email;
+
+  document.getElementById('roleBadge').textContent=
+   profile.role==='admin'?'ADMINISTRADOR':'CLIENTE';
+
+  await loadVehicles();
+  await loadAlerts();
+  setupRealtime();
+
+  showPage('home');
+
+  msg('Sessão iniciada com sucesso.');
+ }catch(e){
+  msg('Erro ao carregar perfil: '+errorText(e));
+ }
+}
+
+/* =================================
+   SAIR
+================================= */
+
+async function logout(){
+ stopTracking();
+ realtimeChannels.forEach(c=>db.removeChannel(c));
+ realtimeChannels=[];
+
+ await db.auth.signOut();
+
+ currentUser=null;
+ profile=null;
+ vehicles=[];
+ showAuth();
+}
+
+/* =================================
+   NAVEGAÇÃO
+================================= */
+
+function showPage(id){
+ document.querySelectorAll('.page').forEach(p=>{
+  p.classList.add('hidden');
+ });
+
+ document.getElementById(id).classList.remove('hidden');
+
+ if(id==='mapPage'){
+  setTimeout(()=>{
+   initMap();
+   loadPositions();
+  },250);
+ }
+
+ if(id==='vehicles') loadVehicles();
+ if(id==='alerts') loadAlerts();
+}
+
+/* =================================
+   CARREGAR MOTAS
+================================= */
+
+async function loadVehicles(){
+ if(!currentUser) return;
+
+ try{
+  let query=db.from('gps_vehicles').select('*')
+   .order('created_at',{ascending:false});
+
+  // RLS limita clientes às suas próprias motas.
+  // Administrador pode consultar todas.
+  const {data,error}=await query;
+
+  if(error) throw error;
+
+  vehicles=data||[];
+
+  document.getElementById('totalVehicles').textContent=
+   vehicles.length;
+
+  document.getElementById('activeVehicles').textContent=
+   vehicles.filter(v=>v.status==='active').length;
+
+  document.getElementById('stolenVehicles').textContent=
+   vehicles.filter(v=>v.status==='stolen').length;
+
+  renderVehicles();
+
+ }catch(e){
+  msg('Erro ao carregar motas: '+errorText(e));
+ }
+}
+
+function renderVehicles(){
+ const list=document.getElementById('vehicleList');
+ list.innerHTML='';
+
+ if(!vehicles.length){
+  list.textContent='Ainda não existem motas registadas.';
+  return;
+ }
+
+ vehicles.forEach(v=>{
+  const div=document.createElement('div');
+  div.className='vehicle';
+
+  const title=document.createElement('strong');
+  title.textContent=v.motorcycle_name;
+
+  const details=document.createElement('div');
+  details.className='muted';
+  details.textContent=
+   'Matrícula: '+(v.plate_number||'Não indicada')+
+   ' | Marca: '+(v.brand||'Não indicada');
+
+  const status=document.createElement('span');
+  status.className='badge'+
+   (v.status==='stolen'?' red':'');
+  status.textContent=v.status.toUpperCase();
+
+  const actions=document.createElement('div');
+  actions.className='actions';
+
+  const track=document.createElement('button');
+  track.textContent='TRANSMITIR GPS';
+  track.onclick=()=>startTracking(v.id);
+
+  const locate=document.createElement('button');
+  locate.className='secondary';
+  locate.textContent='VER NO MAPA';
+  locate.onclick=()=>{
+   showPage('mapPage');
+   setTimeout(()=>focusVehicle(v.id),600);
+  };
+
+  const stolen=document.createElement('button');
+  stolen.className='danger';
+  stolen.textContent='MARCAR ROUBADA';
+  stolen.onclick=()=>markStolen(v.id);
+
+  const normal=document.createElement('button');
+  normal.className='success';
+  normal.textContent='MARCAR ATIVA';
+  normal.onclick=()=>changeStatus(v.id,'active');
+
+  actions.append(track,locate,stolen,normal);
+  div.append(title,details,status,actions);
+
+  list.appendChild(div);
+ });
+}
+
+/* =================================
+   ADICIONAR MOTA
+================================= */
+
+async function addVehicle(){
+ const name=document.getElementById('vname').value.trim();
+
+ if(!name){
+  msg('Introduz o nome da mota.');
+  return;
+ }
+
+ try{
+  const row={
+   owner_id:currentUser.id,
+   motorcycle_name:name,
+   plate_number:document.getElementById('plate').value.trim()||null,
+   brand:document.getElementById('brand').value.trim()||null,
+   model:document.getElementById('model').value.trim()||null,
+   color:document.getElementById('color').value.trim()||null,
+   status:'active'
+  };
+
+  const {error}=await db.from('gps_vehicles').insert(row);
+
+  if(error) throw error;
+
+  ['vname','plate','brand','model','color'].forEach(id=>{
+   document.getElementById(id).value='';
+  });
+
+  msg('Mota registada com sucesso!');
+  await loadVehicles();
+  showPage('vehicles');
+
+ }catch(e){
+  msg('Erro ao registar mota: '+errorText(e));
+ }
+}
+
+/* =================================
+   ESTADO / ROUBO
+================================= */
+
+async function changeStatus(id,status){
+ try{
+  const {error}=await db.from('gps_vehicles')
+   .update({status})
+   .eq('id',id);
+
+  if(error) throw error;
+
+  msg('Estado atualizado: '+status);
+  await loadVehicles();
+ }catch(e){
+  msg('Erro ao alterar estado: '+errorText(e));
+ }
+}
+
+async function markStolen(id){
+ if(!confirm('Confirmas que esta mota foi roubada?')) return;
+
+ try{
+  const v=vehicles.find(x=>x.id===id);
+  if(!v) return;
+
+  const {error}=await db.from('gps_vehicles')
+   .update({status:'stolen'})
+   .eq('id',id);
+
+  if(error) throw error;
+
+  const {error:alertError}=await db.from('gps_alerts').insert({
+   vehicle_id:id,
+   alert_type:'stolen',
+   message:'Mota marcada como roubada: '+v.motorcycle_name
+  });
+
+  if(alertError) throw alertError;
+
+  msg('Alerta de roubo registado. Consulta a última localização GPS.');
+  await loadVehicles();
+  await loadAlerts();
+
+ }catch(e){
+  msg('Erro no alerta: '+errorText(e));
+ }
+}
+
+/* =================================
+   GPS DO TELEFONE
+================================= */
+
+function startTracking(vehicleId){
+ if(!navigator.geolocation){
+  msg('Este navegador não suporta GPS.');
+  return;
+ }
+
+ if(!window.isSecureContext){
+  msg('O GPS exige HTTPS. Abre a aplicação através de um endereço seguro.');
+  return;
+ }
+
+ stopTracking();
+
+ msg('A pedir autorização GPS ao telefone...');
+
+ gpsWatch=navigator.geolocation.watchPosition(
+  async position=>{
+   try{
+    const c=position.coords;
+
+    const record={
+     vehicle_id:vehicleId,
+     latitude:c.latitude,
+     longitude:c.longitude,
+     speed:c.speed===null?0:c.speed*3.6,
+     heading:c.heading,
+     accuracy:c.accuracy,
+     source:'phone',
+     recorded_at:new Date().toISOString()
+    };
+
+    const {error}=await db.from('gps_positions').insert(record);
+
+    if(error) throw error;
+
+    msg(
+     'GPS A TRANSMITIR\n'+
+     'Latitude: '+c.latitude.toFixed(6)+'\n'+
+     'Longitude: '+c.longitude.toFixed(6)+'\n'+
+     'Velocidade: '+(record.speed||0).toFixed(1)+' km/h'
+    );
+
+   }catch(e){
+    msg('Erro ao enviar GPS: '+errorText(e));
+   }
+  },
+  error=>{
+   msg('Erro GPS: '+error.message+
+    '. Verifica as permissões de localização.');
+  },
+  {
+   enableHighAccuracy:true,
+   maximumAge:3000,
+   timeout:20000
+  }
+ );
+
+}
+
+function stopTracking(){
+ if(gpsWatch!==null){
+  navigator.geolocation.clearWatch(gpsWatch);
+  gpsWatch=null;
+ }
+}
+
+/* =================================
+   MAPA LEAFLET
+================================= */
+
+function initMap(){
+ if(map){
+  map.invalidateSize();
+  return;
+ }
+
+ map=L.map('map').setView([-25.9692,32.5732],12);
+
+ L.tileLayer(
+  'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {
+   maxZoom:19,
+   attribution:'© OpenStreetMap contributors'
+  }
+ ).addTo(map);
+}
+
+async function loadPositions(){
+ if(!map) initMap();
+
+ try{
+  const ids=vehicles.map(v=>v.id);
+
+  if(!ids.length){
+   document.getElementById('mapStatus').textContent=
+    'Ainda não existem motas.';
+   return;
+  }
+
+  const {data,error}=await db
+   .from('gps_positions')
+   .select('*')
+   .in('vehicle_id',ids)
+   .order('recorded_at',{ascending:false})
+   .limit(500);
+
+  if(error) throw error;
+
+  const latest={};
+
+  (data||[]).forEach(p=>{
+   if(!latest[p.vehicle_id]){
+    latest[p.vehicle_id]=p;
+   }
+  });
+
+  Object.values(latest).forEach(p=>{
+   const v=vehicles.find(x=>x.id===p.vehicle_id);
+   if(!v) return;
+
+   const point=[p.latitude,p.longitude];
+
+   if(markers[p.vehicle_id]){
+    markers[p.vehicle_id].setLatLng(point);
+   }else{
+    markers[p.vehicle_id]=L.marker(point).addTo(map);
+   }
+
+   markers[p.vehicle_id].bindPopup(
+    '<b>'+safe(v.motorcycle_name)+'</b><br>'+
+    'Matrícula: '+safe(v.plate_number||'Não indicada')+'<br>'+
+    'Velocidade: '+Number(p.speed||0).toFixed(1)+' km/h<br>'+
+    'Atualizado: '+new Date(p.recorded_at).toLocaleString()
+   );
+  });
+
+  const points=Object.values(latest);
+
+  if(points.length){
+   map.fitBounds(
+    L.latLngBounds(points.map(p=>[p.latitude,p.longitude])),
+    {padding:[30,30],maxZoom:15}
+   );
+  }
+
+  document.getElementById('mapStatus').textContent=
+   points.length+' motas com localização registada.';
+
+ }catch(e){
+  msg('Erro ao carregar mapa: '+errorText(e));
+ }
+}
+
+function focusVehicle(id){
+ const marker=markers[id];
+ if(marker){
+  map.setView(marker.getLatLng(),17);
+  marker.openPopup();
+ }
+}
+
+function safe(value){
+ const d=document.createElement('div');
+ d.textContent=String(value);
+ return d.innerHTML;
+}
+
+/* =================================
+   ALERTAS
+================================= */
+
+async function loadAlerts(){
+ if(!currentUser) return;
+
+ try{
+  const {data,error}=await db
+   .from('gps_alerts')
+   .select('*')
+   .order('created_at',{ascending:false})
+   .limit(100);
+
+  if(error) throw error;
+
+  document.getElementById('totalAlerts').textContent=
+   (data||[]).length;
+
+  const list=document.getElementById('alertList');
+  list.innerHTML='';
+
+  if(!data?.length){
+   list.textContent='Não existem alertas.';
+   return;
+  }
+
+  data.forEach(a=>{
+   const div=document.createElement('div');
+   div.className='vehicle';
+
+   const title=document.createElement('strong');
+   title.textContent=a.alert_type.toUpperCase();
+
+   const detail=document.createElement('div');
+   detail.textContent=a.message||'Alerta de segurança';
+
+   const date=document.createElement('small');
+   date.className='muted';
+   date.textContent=new Date(a.created_at).toLocaleString();
+
+   div.append(title,detail,date);
+   list.appendChild(div);
+  });
+
+ }catch(e){
+  msg('Erro ao carregar alertas: '+errorText(e));
+ }
+}
+
+/* =================================
+   ATUALIZAÇÃO EM TEMPO REAL
+================================= */
+
+function setupRealtime(){
+ realtimeChannels.forEach(c=>db.removeChannel(c));
+ realtimeChannels=[];
+
+ const channel=db.channel('julferiin-gps-live');
+
+ channel
+  .on('postgres_changes',{
+   event:'*',
+   schema:'public',
+   table:'gps_positions'
+  },()=>{
+   if(!document.getElementById('mapPage').classList.contains('hidden')){
+    loadPositions();
+   }
+  })
+  .on('postgres_changes',{
+   event:'*',
+   schema:'public',
+   table:'gps_vehicles'
+  },()=>{
+   loadVehicles();
+  })
+  .on('postgres_changes',{
+   event:'INSERT',
+   schema:'public',
+   table:'gps_alerts'
+  },()=>{
+   loadAlerts();
+  })
+  .subscribe();
+
+ realtimeChannels.push(channel);
+}
+
+/* =================================
+   MUDANÇAS DE SESSÃO
+================================= */
+
+db.auth.onAuthStateChange((event,session)=>{
+ if(event==='SIGNED_OUT'){
+  currentUser=null;
+  profile=null;
+  showAuth();
+ }
+});
+
+init();
+</script>
+
+</body>
+</html>
